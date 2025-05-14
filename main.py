@@ -1,16 +1,22 @@
 import time
 from threezero_lookup import LookUp
+from adc_lookup import ADC
 from jira import JIRA, JIRAError
 import os
 import csv
 import pandas as pd
 import math
+import shutil
 import datetime
 import custom_fields
 from custom_fields import Customfield
 from openpyxl import load_workbook
+COMPLETE_PATH = r'C:\Users\sbezirgan\OneDrive - CoreLogic Solutions, LLC\Documents\LOCAL_FOR_TS\Completed'
+ERROR_PATH = r'C:\Users\sbezirgan\OneDrive - CoreLogic Solutions, LLC\Documents\LOCAL_FOR_TS\Error'
+
+DEFECT_PATH =  r'C:\Users\sbezirgan\OneDrive - CoreLogic Solutions, LLC\Documents\LOCAL_FOR_TS\Error'
 FILE_NAME = 'PPV_Second_Format.xlsx'
-FOLDER_PATH = rf'\\filer-diablo-prd\data_acquisition\QA\EagleQC\Daily defects upload\{FILE_NAME}'
+FOLDER_PATH = rf'C:\Users\sbezirgan\OneDrive - CoreLogic Solutions, LLC\Documents\LOCAL_FOR_TS'
 KEY_LIST = []
 STAT_LIST = []
 INDEX_LIST = []
@@ -30,9 +36,33 @@ EDG_QA_CTS_NAME = 'EDG - Transactions QA CTS'
 EDG_QA_CTS_ID = '21300'
 BEGIN_DATE_STRING = 'T12:05:00.000-0700'
 LookUp.thirtyseventytwo_Values
+ALPHA =['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z']
+
+
+def check_first_letter(stringg:str):
+    return stringg[0].upper() in ALPHA
+
+
+def check_any_letter(my_st:str):
+    flag = False
+    for let in my_st:
+        if let.upper() in ALPHA:
+            flag = True
+    return flag
+
+def read_the_folder(path:str):
+    FILE_LIST = []
+    for filename in os.listdir(path):
+        f = os.path.join(path, filename)
+
+        if os.path.isfile(f):
+            FILE_LIST.append(f)
+    return FILE_LIST
+
 def start_connection():
     '''Jira Server Connection'''
-    jiraOptions = {'server': "https://jira-corelogic.valiantys.net"}
+    #jiraOptions = {'server': "https://jira-corelogic.valiantys.net"}
+    jiraOptions = {'server': "https://corelogic.atlassian.net"}
     jira = JIRA(options=jiraOptions, basic_auth=(JIRA_USERNAME, JIRA_PASSWORD))
     return jira
 
@@ -113,153 +143,467 @@ def create_bulk_issues(jira:JIRA,issue_value_list):
 
 
 jira = start_connection()
-df = pd.read_excel(FOLDER_PATH)
-df = df.reset_index()
-print(df)
-format_list = []
-num_of_errors = 0
-num_of_issues = 0
+file_list = read_the_folder(FOLDER_PATH)
+print(file_list)
+num_of_iterations = 1
+for file in file_list:
+    if 'TCS' in file or 'tcs' in file or 'CTS' in file or 'cts' in file:
+        KEY_LIST = []
+        STAT_LIST = []
+        INDEX_LIST = []
+        PROBLEM_INDEX_LIST = []
+        PROBLEM_ROWS = []
+        PROB_TEXT = []
+        df = pd.read_excel(file)
+        df = df.reset_index()
+        print(df)
+        format_list = []
+        num_of_errors = 0
+        num_of_issues = 0
+        DEFECTED_FILE_PATH = rf'C:\Users\sbezirgan\OneDrive - CoreLogic Solutions, LLC\Documents\LOCAL_FOR_TS\Error\Defected_File{num_of_iterations}.xlsx'
+        # df['Detected Date']= pd.to_datetime(pd.to_numeric(df['Detected Date'],errors='coerce'),errors='coerce',origin='1899-12-30',unit='D')
+        # df['BatchDate'] = pd.to_datetime(pd.to_numeric(df['BatchDate'], errors='coerce'), errors='coerce',
+        #                                      origin='1899-12-30', unit='D')
+        # df['BatchDate'] = pd.to_datetime(pd.to_numeric(df['BatchDate'], errors='coerce'), errors='coerce',
+        #                                      origin='1899-12-30', unit='D')
+        # df["BatchDate"] = pd.to_datetime(df['BatchDate'], unit='D', origin='1899-12-30')
+        # df["Detected Date"] = pd.to_datetime(df['Detected Date'], unit='D', origin='1899-12-30')
+        # df['Detected Date'] = df['Detected Date'].astype(str)
+        #df['BatchDate'] = df['BatchDate'].astype(str)
+        # df['BatchDate'] = df['BatchDate'].replace("/","-")
+        # df['Detected Date'] = df['Detected Date'].replace("/", "-")
+        for index, row in df.iterrows():
+            if (str(row["Layout"]) == '3072' or str(row["Layout"]) == 'FCL') and not (pd.isna(row['Deed Category'])):
+                print("1st")
+                if str(row['Vendor Name']).upper() == 'COGNIZANT' :
+                    project_value = '21300'
+                elif str(row['Vendor Name']).upper() == 'TCS':
+                    project_value = '21900'
+                else:
+                    pass
+                if pd.isna(row['3072 Field Name']):
+                    lookup_key = "Non-keyable"
+                else:
+                    lookup_key = str(row['3072 Field Name']).split("_")[0]
 
-for index, row in df.iterrows():
-    lookup_key = str(row['3072 Field Name']).split("_")[0]
-    my_val = 'mgundluru@corelogic.com' if row['Assignee '] != 'varssingh@corelogic.com' else 'varssingh@corelogic.com'
-    QA_Regular_Format1_3072 = {
-        'project': {'id': '21900'},#'EDG - QA Transaction TCS'
-        'summary': row['Summary'],  #Summary
-        'description': row['Description'],#Description
-        'issuetype': {'name': row['Issue Type']},#IssueType
-        #'customfield_24512': {'value': row['3072 Field Name']},  # 3072-------------
-        'customfield_24512': {'value': LookUp.thirtyseventytwo_Values[lookup_key]},#3072
-        'customfield_29815': ' ' if math.isnan(row['Record ID']) else str(row['Record ID']),  # RecordID
-        'customfield_24502': {'value': row['Project']},  # Project
-        'customfield_24513': {'value': row['Vendor Name']},  # Vendor
-        'customfield_18909': {'value': row['State']},  # State
-        'customfield_25100': {'value': row['County'].upper()},  # County
-        'customfield_24519': ' ' if math.isnan(row['Doc Number']) else str(row['Doc Number']),  # Doc Number
-        'customfield_26900': ' ' if math.isnan(row['Recording Book']) else str(row['Recording Book']),  # Recording Book
-        'customfield_27309': ' ' if math.isnan(row['Recording Page']) else str(row['Recording Page']),  # Recording Page
-        'customfield_24526': format_the_date(row['Recording date']),  # Recording Date
-        'customfield_26002': str(row['Doc Year']),  # DocYear
-        'customfield_24501': {'value': row['Deed Category']},  # DeedCategory
-        'customfield_24511': {'value': row['DAMAR Code']},  # DAMAR
-        # 'customfield_24508' : {'value' : ''},#ADC
-        'customfield_24505': {'value': row['Type of Error']},  # TypeofError
-        'customfield_24517': {'name': row['Detected By']},  # DetectedBy
-        'customfield_24529': format_the_date(row['Detected Date']),  #Detected Date
-        'customfield_24528': row['Sample date '],  # Sample Date
-        'customfield_24506': {'value': row['Critical/Non-Critical']},  # Critical
-        'customfield_24515': format_the_date(row['BatchDate']), # Batch Date
-        'customfield_26003': str(row["Batch Seq"]), #Batch Seq
-        'customfield_26004': str(row["FIPS"]),#FIPS Code
-        'customfield_26015': str(row["Layout"]),#Layout
-        'assignee': {'name': my_val}, #Assignee
-        'customfield_25506': ' ' if math.isnan(row['FilmID']) else str(row['FilmID']),#FilmID
-        'customfield_17716' : format_the_date(row['Begin date']), #Begin Date
-        'customfield_25900' : str(row["Remarks"]) #Remarks
-    }
+                if check_any_letter(str(row['Doc Number'])):
+                    doc_num_val = str(row['Doc Number'])
+                else:
+                    doc_num_val = ' ' if pd.isna(row['Doc Number']) else str(row['Doc Number'])
+                if check_any_letter(str(row['Recording Book'])):
+                    book_val = str(row['Recording Book'])
+                else:
+                    book_val = ' ' if pd.isna(row['Recording Book']) else str(row['Recording Book'])
 
-    try:
-        new_issue = jira.create_issue(fields=QA_Regular_Format1_3072)
+                if check_any_letter(str(row['FilmID'])):
+                    film_id = str(row['FilmID'])
+                else:
+                    film_id = ' ' if pd.isna(row['FilmID']) else str(row['FilmID'])
+                rec_date = str(row['Recording date']).split(" ")[0]
+                my_val = 'mgundluru@corelogic.com' if row['Assignee '] != 'varssingh@corelogic.com' else 'varssingh@corelogic.com'
+                QA_Regular_Format1_3072 = {
+                    'project': {'id': project_value},#'EDG - QA Transaction TCS'
+                    'summary': row['Summary'],  #Summary
+                    'description': row['Description'],#Description
+                    'issuetype': {'name': row['Issue Type']},#IssueType
+                    #'customfield_24512': {'value': row['3072 Field Name']},  # 3072-------------
+                    'customfield_24512': {'value': LookUp.thirtyseventytwo_Values[lookup_key]},#3072
+                    'customfield_29815': ' ' if math.isnan(row['Record ID']) else str(row['Record ID']),  # RecordID
+                    'customfield_24502': {'value': row['Project']},  # Project
+                    'customfield_24513': {'value': row['Vendor Name']},  # Vendor
+                    'customfield_18909': {'value': row['State']},  # State
+                    'customfield_25100': {'value': row['County'].upper()},  # County
+                    'customfield_24519': doc_num_val,  # Doc Number
+                    'customfield_26900': book_val,  # Recording Book
+                    'customfield_27309': ' ' if pd.isna(row['Recording Page']) else str(row['Recording Page']),  # Recording Page
+                    'customfield_24526': None if pd.isna(row['Recording date']) else str(row['Recording date']),  # Recording Date
+                    'customfield_26002': str(row['Doc Year']),  # DocYear
+                    'customfield_24501': {'value': row['Deed Category']},  # DeedCategory
+                    'customfield_24511': {'value': row['DAMAR Code']},  # DAMAR
+                    # 'customfield_24508' : {'value' : ''},#ADC
+                    'customfield_24505': {'value': row['Type of Error']},  # TypeofError
+                    'customfield_24517': {'name': row['Detected By']},  # DetectedBy
+                    'customfield_24529': None if pd.isna(row['Detected Date']) else str(row['Detected Date']),  # Detected Date
+                    'customfield_24528': str(row['Sample date']),  # Sample Date
+                    'customfield_24506': {'value': row['Critical/Non-Critical']},  # Critical
+                    'customfield_24515': None if pd.isna(row['BatchDate']) else str(row['BatchDate']), # Batch Date
+                    'customfield_26003': str(row["Batch Seq"]), #Batch Seq
+                    'customfield_26004': str(row["Fips"]),#FIPS Code
+                    'customfield_26015': str(row["Layout"]),#Layout
+                    'assignee': {'name': my_val}, #Assignee
+                    'customfield_25506': film_id,#FilmID
+                    'customfield_17716' : format_the_date(row['Begin date']), #Begin Date
+                    'customfield_25900' : str(row["Remarks"]) #Remarks
+                }
 
-    except JIRAError as e:
-        print(f"Error in row #{index+2}")
-        print(e.response.text)
-        error_list =  e.response.text.split(",")[1:]
-        error_str = " ".join(error_list)
-        PROB_TEXT.append(error_str)
-        num_of_errors +=1
-        PROBLEM_INDEX_LIST.append(index)
+                try:
+                    new_issue = jira.create_issue(fields=QA_Regular_Format1_3072)
 
-
-    else:
-        num_of_issues += 1
-        print(f"Row #{index+2}: created with the key\t" +new_issue.key)
-        KEY_LIST.append(str(new_issue.key))
-        STAT_LIST.append(df.loc[index,"Status"])
-        INDEX_LIST.append(index)
-
-
-
-
-    format_list.append(QA_Regular_Format1_3072)
-print(f"Total number of errors encountered: {num_of_errors}")
-print(f"Total number of issues have created:{num_of_issues}")
-print(f"Total number of records in the excel sheet:{len(df.index)}")
-print(PROB_TEXT)
-#df['Error Description'] = PROB_TEXT
-
-zipped_list = list(zip(INDEX_LIST, KEY_LIST, STAT_LIST))
-zipped_list_short = list(zip(INDEX_LIST, KEY_LIST))
-print(len(df.index))
-print(zipped_list)
-print(PROBLEM_INDEX_LIST)
-NO_KEY_LIST = []
-
-for _ in range(len(PROBLEM_INDEX_LIST)):
-    NO_KEY_LIST.append('No Key')
-NO_LIST = list(zip(PROBLEM_INDEX_LIST,NO_KEY_LIST)) + zipped_list_short
-LLT = NO_LIST.sort(key=lambda x : x[0]) #Full List of indexes with Jira keys and No keys
-JUST_KEY_LIST = [l[1] for l in NO_LIST]
-with open('out2.csv', 'w') as f:
-    write = csv.writer(f)
-    write.writerow(HEADERS)
-    write.writerows(zipped_list)
-
-time.sleep(2)
-with open('out2.csv', "r") as my_file:
-    # pass the file object to reader()
-    file_reader = csv.reader(my_file)
-    # do this for all the rows
-    for i in file_reader:
-        if i == [] or i == ['Num_of_Records', 'Keys', 'Stat']:
-            continue
-        iss = jira.issue(str(i[1]))
-        if i[2].lower() == 'open':
-            jira.transition_issue(iss,transition='OPEN')
-        elif i[2].lower() == 'closed':
-            jira.transition_issue(iss, transition='Closed')
+                except (JIRAError,TypeError) as e:
+                    print(f"Error in row #{index+2}")
+                    print(e.response.text)
+                    error_list =  e.response.text.split(",")[1:]
+                    error_str = " ".join(error_list)
+                    PROB_TEXT.append(error_str)
+                    num_of_errors +=1
+                    PROBLEM_INDEX_LIST.append(index)
 
 
-prob_df = df.loc[PROBLEM_INDEX_LIST]
-print("------------")
-print(prob_df)
-print(len(PROB_TEXT))
-PROB_LIST = []
-for prob in PROB_TEXT:
-    new_list = prob.split('"')
-    WOW_LIST = []
-    for item in new_list:
-        if "custom" not in item:
-            new_list.remove(item)
-    for item1 in new_list:
-        if "custom" in item1:
-            WOW_LIST.append(item1)
-    PROB_LIST.append(WOW_LIST)
-print(PROB_LIST)
-for i in PROB_LIST:
-    length = 0
-    for a in i:
-        if a in Customfield.cust_field_dic.keys():
-            new_str = str(a.replace(a,Customfield.cust_field_dic[a]))
-            i[length] = new_str
-        length += 1
-print(PROB_LIST)
-print('---------------')
-prb_lst = pd.Series(PROB_TEXT)
-prob_df['Defected Fields'] = PROB_LIST
-prob_df.to_csv('prob.csv',encoding='utf-8', index=False)
-time.sleep(2)
 
-prob = pd.read_csv('prob.csv')
-prob.to_excel("Defected_File.xlsx",sheet_name='Defected records', index=False)
-field_code_df = pd.DataFrame.from_dict(Customfield.custom_field_dictt)
-time.sleep(2)
-writer = pd.ExcelWriter('Defected_File.xlsx', engine='openpyxl', mode='a')
-field_code_df.to_excel(writer,sheet_name='Code Table')
-writer.close()
-df.insert(32, "Jira Keys",JUST_KEY_LIST)
-df.to_excel(FOLDER_PATH, index=False)
-print(field_code_df)
+                else:
+                    num_of_issues += 1
+                    print(f"Row #{index+2}: created with the key\t" +new_issue.key)
+                    KEY_LIST.append(str(new_issue.key))
+                    STAT_LIST.append(df.loc[index,"Status"])
+                    INDEX_LIST.append(index)
+
+
+
+
+                format_list.append(QA_Regular_Format1_3072)
+            elif (str(row["Layout"]) == 'ADC') and not (pd.isna(row['Deed Category'])):
+                print("2nd")
+
+                if str(row['Vendor Name']).upper() == 'COGNIZANT' :
+                    project_value = '21300'
+                elif str(row['Vendor Name']).upper() == 'TCS':
+                    project_value = '21900'
+                else:
+                    pass
+                if check_any_letter(str(row['Doc Number'])):
+                    doc_num_val = str(row['Doc Number'])
+                else:
+                    doc_num_val = ' ' if pd.isna(row['Doc Number']) else str(row['Doc Number'])
+                if check_any_letter(str(row['Recording Book'])):
+                    book_val = str(row['Recording Book'])
+                else:
+                    book_val = ' ' if pd.isna(row['Recording Book']) else str(row['Recording Book'])
+
+                if check_any_letter(str(row['FilmID'])):
+                    film_id = str(row['FilmID'])
+                else:
+                    film_id = ' ' if pd.isna(row['FilmID']) else str(row['FilmID'])
+                lookup_key_adc =str(row['ADC Fields']).split("_")[0]
+                my_val = 'mgundluru@corelogic.com' if row['Assignee '] != 'varssingh@corelogic.com' else 'varssingh@corelogic.com'
+                QA_Regular_Format1_3072 = {
+                    'project': {'id': project_value},  # 'EDG - QA Transaction TCS'
+                    'summary': row['Summary'],  # Summary
+                    'description': row['Description'],  # Description
+                    'issuetype': {'name': row['Issue Type']},  # IssueType
+                    # 'customfield_24512': {'value': row['3072 Field Name']},  # 3072-------------
+                    #'customfield_24512': {'value': LookUp.thirtyseventytwo_Values[lookup_key]},  # 3072
+                    'customfield_29815': ' ' if math.isnan(row['Record ID']) else str(row['Record ID']),  # RecordID
+                    'customfield_24502': {'value': row['Project']},  # Project
+                    'customfield_24513': {'value': row['Vendor Name']},  # Vendor
+                    'customfield_18909': {'value': row['State']},  # State
+                    'customfield_25100': {'value': row['County'].upper()},  # County
+                    'customfield_24519': doc_num_val,  # Doc Number
+                    'customfield_26900': book_val,
+                    # Recording Book
+                    'customfield_27309': ' ' if pd.isna(row['Recording Page']) else str(row['Recording Page']),
+                    # Recording Page
+                    'customfield_24526': None if pd.isna(row['Recording date']) else str(row['Recording date']),  # Recording Date
+                    'customfield_26002': str(row['Doc Year']),  # DocYear
+                    'customfield_24501': {'value': row['Deed Category']},  # DeedCategory
+                    'customfield_24511': {'value': row['DAMAR Code']},  # DAMAR
+                    'customfield_24508' : {'value' : ADC.adc_Val[lookup_key_adc]},#ADC
+                    'customfield_24505': {'value': row['Type of Error']},  # TypeofError
+                    'customfield_24517': {'name': row['Detected By']},  # DetectedBy
+                    'customfield_24529': None if pd.isna(row['Detected Date']) else str(row['Detected Date']),  # Detected Date
+                    'customfield_24528': str(row['Sample date']),  # Sample Date
+                    'customfield_24506': {'value': row['Critical/Non-Critical']},  # Critical
+                    'customfield_24515': None if pd.isna(row['BatchDate']) else str(row['BatchDate']),  # Batch Date
+                    'customfield_26003': str(row["Batch Seq"]),  # Batch Seq
+                    'customfield_26004': str(row["Fips"]),  # FIPS Code
+                    'customfield_26015': str(row["Layout"]),  # Layout
+                    'assignee': {'name': my_val},  # Assignee
+                    'customfield_25506': film_id,  # FilmID
+                    'customfield_17716': format_the_date(row['Begin date']),  # Begin Date
+                    'customfield_25900': str(row["Remarks"])  # Remarks
+                }
+
+                try:
+                    new_issue = jira.create_issue(fields=QA_Regular_Format1_3072)
+
+                except (JIRAError, TypeError) as e:
+                    print(f"Error in row #{index + 2}")
+                    print(e.response.text)
+                    error_list = e.response.text.split(",")[1:]
+                    error_str = " ".join(error_list)
+                    PROB_TEXT.append(error_str)
+                    num_of_errors += 1
+                    PROBLEM_INDEX_LIST.append(index)
+
+
+
+                else:
+                    num_of_issues += 1
+                    print(f"Row #{index + 2}: created with the key\t" + new_issue.key)
+                    KEY_LIST.append(str(new_issue.key))
+                    STAT_LIST.append(df.loc[index, "Status"])
+                    INDEX_LIST.append(index)
+
+                format_list.append(QA_Regular_Format1_3072)
+
+            elif (str(row["Layout"]) == '3072' or str(row["Layout"]) == 'FCL') and (pd.isna(row['Deed Category'])):
+                print("3RD")
+                if str(row['Vendor Name']).upper() == 'COGNIZANT':
+                    project_value = '21300'
+                elif str(row['Vendor Name']).upper() == 'TCS':
+                    project_value = '21900'
+                else:
+                    pass
+                if pd.isna(row['3072 Field Name']):
+                    lookup_key = "Non-keyable"
+                else:
+                    lookup_key = str(row['3072 Field Name']).split("_")[0]
+
+                if check_any_letter(str(row['Doc Number'])):
+                    doc_num_val = str(row['Doc Number'])
+                else:
+                    doc_num_val = ' ' if pd.isna(row['Doc Number']) else str(row['Doc Number'])
+                if check_any_letter(str(row['Recording Book'])):
+                    book_val = str(row['Recording Book'])
+                else:
+                    book_val = ' ' if pd.isna(row['Recording Book']) else str(row['Recording Book'])
+
+                if check_any_letter(str(row['FilmID'])):
+                    film_id = str(row['FilmID'])
+                else:
+                    film_id = ' ' if pd.isna(row['FilmID']) else str(row['FilmID'])
+                my_val = 'mgundluru@corelogic.com' if row[
+                                                          'Assignee '] != 'varssingh@corelogic.com' else 'varssingh@corelogic.com'
+                QA_Regular_Format1_3072 = {
+                    'project': {'id': project_value},  # 'EDG - QA Transaction TCS'
+                    'summary': row['Summary'],  # Summary
+                    'description': row['Description'],  # Description
+                    'issuetype': {'name': row['Issue Type']},  # IssueType
+                    # 'customfield_24512': {'value': row['3072 Field Name']},  # 3072-------------
+                    'customfield_24512': {'value': LookUp.thirtyseventytwo_Values[lookup_key]},  # 3072
+                    'customfield_29815': ' ' if math.isnan(row['Record ID']) else str(row['Record ID']),  # RecordID
+                    'customfield_24502': {'value': row['Project']},  # Project
+                    'customfield_24513': {'value': row['Vendor Name']},  # Vendor
+                    'customfield_18909': {'value': row['State']},  # State
+                    'customfield_25100': {'value': row['County'].upper()},  # County
+                    'customfield_24519': doc_num_val,  # Doc Number
+                    'customfield_26900': book_val,  # Recording Book
+                    'customfield_27309': ' ' if pd.isna(row['Recording Page']) else str(row['Recording Page']),
+                    # Recording Page
+                    'customfield_24526': None if pd.isna(row['Recording date']) else str(row['Recording date']),  # Recording Date
+                    'customfield_26002': str(row['Doc Year']),  # DocYear
+                    #'customfield_24501': {'value': row['Deed Category']},  # DeedCategory
+                    #'customfield_24511': {'value': row['DAMAR Code']},  # DAMAR
+                    # 'customfield_24508' : {'value' : ''},#ADC
+                    'customfield_24505': {'value': row['Type of Error']},  # TypeofError
+                    'customfield_24517': {'name': row['Detected By']},  # DetectedBy
+                    'customfield_24529': None if pd.isna(row['Detected Date']) else str(row['Detected Date']),  # Detected Date
+                    'customfield_24528': str(row['Sample date']),  # Sample Date
+                    'customfield_24506': {'value': row['Critical/Non-Critical']},  # Critical
+                    'customfield_24515': None if pd.isna(row['BatchDate']) else str(row['BatchDate']),  # Batch Date
+                    'customfield_26003': str(row["Batch Seq"]),  # Batch Seq
+                    'customfield_26004': str(row["Fips"]),  # FIPS Code
+                    'customfield_26015': str(row["Layout"]),  # Layout
+                    'assignee': {'name': my_val},  # Assignee
+                    'customfield_25506': film_id,  # FilmID
+                    'customfield_17716': format_the_date(row['Begin date']),  # Begin Date
+                    'customfield_25900': str(row["Remarks"])  # Remarks
+                }
+
+                try:
+                    new_issue = jira.create_issue(fields=QA_Regular_Format1_3072)
+
+                except (JIRAError, TypeError) as e:
+                    print(f"Error in row #{index + 2}")
+                    print(e.response.text)
+                    error_list = e.response.text.split(",")[1:]
+                    error_str = " ".join(error_list)
+                    PROB_TEXT.append(error_str)
+                    num_of_errors += 1
+                    PROBLEM_INDEX_LIST.append(index)
+
+
+
+                else:
+                    num_of_issues += 1
+                    print(f"Row #{index + 2}: created with the key\t" + new_issue.key)
+                    KEY_LIST.append(str(new_issue.key))
+                    STAT_LIST.append(df.loc[index, "Status"])
+                    INDEX_LIST.append(index)
+
+                format_list.append(QA_Regular_Format1_3072)
+            elif (str(row["Layout"]) == 'ADC') and (pd.isna(row['Deed Category'])):
+                print("4th")
+                if str(row['Vendor Name']).upper() == 'COGNIZANT' :
+                    project_value = '21300'
+                elif str(row['Vendor Name']).upper() == 'TCS':
+                    project_value = '21900'
+                else:
+                    pass
+                if check_any_letter(str(row['Doc Number'])):
+                    doc_num_val = str(row['Doc Number'])
+                else:
+                    doc_num_val = ' ' if pd.isna(row['Doc Number']) else str(row['Doc Number'])
+                if check_any_letter(str(row['Recording Book'])):
+                    book_val = str(row['Recording Book'])
+                else:
+                    book_val = ' ' if pd.isna(row['Recording Book']) else str(row['Recording Book'])
+
+                if check_any_letter(str(row['FilmID'])):
+                    film_id = str(row['FilmID'])
+                else:
+                    film_id = ' ' if pd.isna(row['FilmID']) else str(row['FilmID'])
+                lookup_key_adc =str(row['ADC Fields']).split("_")[0]
+                my_val = 'mgundluru@corelogic.com' if row['Assignee '] != 'varssingh@corelogic.com' else 'varssingh@corelogic.com'
+                QA_Regular_Format1_3072 = {
+                    'project': {'id': project_value},  # 'EDG - QA Transaction TCS'
+                    'summary': row['Summary'],  # Summary
+                    'description': row['Description'],  # Description
+                    'issuetype': {'name': row['Issue Type']},  # IssueType
+                    # 'customfield_24512': {'value': row['3072 Field Name']},  # 3072-------------
+                    #'customfield_24512': {'value': LookUp.thirtyseventytwo_Values[lookup_key]},  # 3072
+                    'customfield_29815': ' ' if math.isnan(row['Record ID']) else str(row['Record ID']),  # RecordID
+                    'customfield_24502': {'value': row['Project']},  # Project
+                    'customfield_24513': {'value': row['Vendor Name']},  # Vendor
+                    'customfield_18909': {'value': row['State']},  # State
+                    'customfield_25100': {'value': row['County'].upper()},  # County
+                    'customfield_24519': doc_num_val,  # Doc Number
+                    'customfield_26900': book_val,
+                    # Recording Book
+                    'customfield_27309': ' ' if pd.isna(row['Recording Page']) else str(row['Recording Page']),
+                    # Recording Page
+                    'customfield_24526': None if pd.isna(row['Recording date']) else str(row['Recording date']),  # Recording Date
+                    'customfield_26002': str(row['Doc Year']),  # DocYear
+                    #'customfield_24501': {'value': row['Deed Category']},  # DeedCategory
+                    #'customfield_24511': {'value': row['DAMAR Code']},  # DAMAR
+                    'customfield_24508' : {'value' : ADC.adc_Val[lookup_key_adc]},#ADC
+                    'customfield_24505': {'value': row['Type of Error']},  # TypeofError
+                    'customfield_24517': {'name': row['Detected By']},  # DetectedBy
+                    'customfield_24529': None if pd.isna(row['Detected Date']) else str(row['Detected Date']),  # Detected Date
+                    'customfield_24528': str(row['Sample date']),  # Sample Date
+                    'customfield_24506': {'value': row['Critical/Non-Critical']},  # Critical
+                    'customfield_24515': None if pd.isna(row['BatchDate']) else str(row['BatchDate']),  # Batch Date
+                    'customfield_26003': str(row["Batch Seq"]),  # Batch Seq
+                    'customfield_26004': str(row["Fips"]),  # FIPS Code
+                    'customfield_26015': str(row["Layout"]),  # Layout
+                    'assignee': {'name': my_val},  # Assignee
+                    'customfield_25506': film_id,  # FilmID
+                    'customfield_17716': format_the_date(row['Begin date']),  # Begin Date
+                    'customfield_25900': str(row["Remarks"])  # Remarks
+                }
+
+                try:
+                    new_issue = jira.create_issue(fields=QA_Regular_Format1_3072)
+
+                except (JIRAError, TypeError) as e:
+                    print(f"Error in row #{index + 2}")
+                    print(e.response.text)
+                    error_list = e.response.text.split(",")[1:]
+                    error_str = " ".join(error_list)
+                    PROB_TEXT.append(error_str)
+                    num_of_errors += 1
+                    PROBLEM_INDEX_LIST.append(index)
+
+
+
+                else:
+                    num_of_issues += 1
+                    print(f"Row #{index + 2}: created with the key\t" + new_issue.key)
+                    KEY_LIST.append(str(new_issue.key))
+                    STAT_LIST.append(df.loc[index, "Status"])
+                    INDEX_LIST.append(index)
+
+                format_list.append(QA_Regular_Format1_3072)
+
+
+        print(f"Total number of errors encountered: {num_of_errors}")
+        print(f"Total number of issues have created:{num_of_issues}")
+        print(f"Total number of records in the excel sheet:{len(df.index)}")
+        print(PROB_TEXT)
+        #df['Error Description'] = PROB_TEXT
+
+        zipped_list = list(zip(INDEX_LIST, KEY_LIST, STAT_LIST))
+        zipped_list_short = list(zip(INDEX_LIST, KEY_LIST))
+        print(len(df.index))
+        print(zipped_list)
+        print(PROBLEM_INDEX_LIST)
+        NO_KEY_LIST = []
+
+        for _ in range(len(PROBLEM_INDEX_LIST)):
+            NO_KEY_LIST.append('No Key')
+        NO_LIST = list(zip(PROBLEM_INDEX_LIST,NO_KEY_LIST)) + zipped_list_short
+        LLT = NO_LIST.sort(key=lambda x : x[0]) #Full List of indexes with Jira keys and No keys
+        JUST_KEY_LIST = [l[1] for l in NO_LIST]
+        with open('out2.csv', 'w') as f:
+            write = csv.writer(f)
+            write.writerow(HEADERS)
+            write.writerows(zipped_list)
+
+        time.sleep(2)
+        with open('out2.csv', "r") as my_file:
+            # pass the file object to reader()
+            file_reader = csv.reader(my_file)
+            # do this for all the rows
+            for i in file_reader:
+                if i == [] or i == ['Num_of_Records', 'Keys', 'Stat']:
+                    continue
+                iss = jira.issue(str(i[1]))
+                if i[2].lower() == 'open':
+                    jira.transition_issue(iss,transition='OPEN')
+                elif i[2].lower() == 'closed':
+                    jira.transition_issue(iss, transition='Closed')
+
+
+        prob_df = df.loc[PROBLEM_INDEX_LIST]
+        print("------------")
+        print(prob_df)
+        print(len(PROB_TEXT))
+        PROB_LIST = []
+        for prob in PROB_TEXT:
+            new_list = prob.split('"')
+            WOW_LIST = []
+            for item in new_list:
+                if "custom" not in item:
+                    new_list.remove(item)
+            for item1 in new_list:
+                if "custom" in item1:
+                    WOW_LIST.append(item1)
+            PROB_LIST.append(WOW_LIST)
+        print(PROB_LIST)
+        for i in PROB_LIST:
+            length = 0
+            for a in i:
+                if a in Customfield.cust_field_dic.keys():
+                    new_str = str(a.replace(a,Customfield.cust_field_dic[a]))
+                    i[length] = new_str
+                length += 1
+        print(PROB_LIST)
+        print('---------------')
+        prb_lst = pd.Series(PROB_TEXT)
+        prob_df['Defected Fields'] = PROB_LIST
+        print('***********')
+        print(prob_df)
+        print('**************')
+        if len(PROB_LIST) > 0:
+            prob_df.to_csv(f'prob{num_of_iterations}.csv',encoding='utf-8', index=False)
+            time.sleep(2)
+
+            prob = pd.read_csv(f'prob{num_of_iterations}.csv')
+            prob.to_excel(DEFECTED_FILE_PATH,sheet_name='Defected records', index=False)
+            field_code_df = pd.DataFrame.from_dict(Customfield.custom_field_dictt)
+            time.sleep(2)
+            writer = pd.ExcelWriter(DEFECTED_FILE_PATH, engine='openpyxl', mode='a')
+            field_code_df.to_excel(writer,sheet_name='Code Table')
+            writer.close()
+        df.insert(32, "Jira Keys",JUST_KEY_LIST)
+        df.to_excel(file, index=False)
+        #print(field_code_df)
+        if not len(PROB_TEXT) > 0:
+            dest = shutil.move(file, COMPLETE_PATH)
+            print('File was successfully moved to Complete')
+        else:
+            dest = shutil.move(file, ERROR_PATH)
+            print('File was successfully moved to Error')
+        num_of_iterations +=1
 #issue = jira.issue('ETQT-22807')
 #read_csv_line_by_line(filename='out2.csv',jira=jira)
 #create_bulk_issues(jira=jira,issue_value_list=format_list)

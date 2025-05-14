@@ -23,7 +23,7 @@ class LookUp:
         "21" : "21_Lender City",
         "22" : "22_Lender State",
         "23" : "23_Document Transfer Tax",
-        "24" : "24_Tax in Full or Less (Basically a CA Field) (F, N, P, U)",
+        "24" : "24_Tax in Full or Less (Basically a CA field) (F, N, P, U)",
         "25" : "25_Seller/Grantor/Plaintiff 1 First Name or Company Name",
         "26" : "26_Seller/Grantor/Plaintiff 1 Last Name or Company Code",
         "27" : "27_Mortgage Amount",
@@ -122,16 +122,16 @@ class LookUp:
         "118" : "118_Buyer/Borrower/Defendant 4 Last Name",
         "119" : "119_Buyer/Borrower 4 Vesting",
         "120" : "120_Buyer/Borrower 4 Relationship Type",
-        "121" : "116_Buyer/Borrower 4 Percent Transferred",
+        "121" : "121_Buyer/Borrower 4 Percent Transferred",
         "122" : "122_APN 9",
         "123" : "123_APN 10",
-        "124" : "124_Seattle Document Number",
-        "125" : "125_Seattle Grant Deed Document Number",
+        "124" : "124_Seattle Document NuSmber",
+        "125" : "125_Seattle Grant Deed Original Document Number",
         "126" : "126_Date of Default (NOD)",
         "127" : "127_Amount of Default (NOD)",
         "128" : "128_Auction Date (NOT)",
         "129" : "129_Auction Time (NOT)",
-        "130" : "130_Auction_Address (NOT)",
+        "130" : "130_Auction Address (NOT)",
         "131" : "131_Auction City (NOT)",
         "132" : "132_Unpaid Balance (NOT)",
         "133" : "133_Beneficiary/Lender Phone Number (NOD & NOT)",
@@ -204,7 +204,13 @@ class LookUp:
         "199" : "199_PACE Total Contractual Assessment payment",
         "200" : "200_First Taxroll Year",
         "201" : "201_Last Taxroll Year",
-        "202" : "202_Assessment Date"
+        "202" : "202_Assessment Date",
+        "Non-keyable" : "Non-keyable",
+        "Incorrect title" : "Incorrect title",
+        "InDID" : "InDID",
+        "DIDIndexID" : "DIDIndexID",
+        "Keyable" : "Keyable"
+
     }
 
     print(thirtyseventytwo_Values["10"])
